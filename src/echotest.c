@@ -1,5 +1,6 @@
 #include <arpa/inet.h>
 #include <assert.h>
+#include <fcntl.h>
 #include <netinet/in.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -118,7 +119,7 @@ patestCallback(const void *inputBuffer, void *outputBuffer,
     out = (int16_t *)outputBuffer;
     in = (int16_t *)inputBuffer;
 
-    debug("called");
+    //debug("called");
     logbufcnt(ctx, "pa ");
     
     if (ctx->done) {
@@ -128,12 +129,6 @@ patestCallback(const void *inputBuffer, void *outputBuffer,
     
     pthread_mutex_lock(&ctx->mtx);
     
-    /* Run the echo canceller */
-#if 0
-    for (ofs = 0; ofs < framesPerBuffer; ofs++)
-	out[ofs] = echo_can_update(ctx->echocan, in[ofs], out[ofs]);
-#endif
-
     /* Copy out samples to be played */
     for (ofs = 0; ofs < framesPerBuffer; ) {
 	/* Need a new buffer? */
@@ -146,14 +141,14 @@ patestCallback(const void *inputBuffer, void *outputBuffer,
 	    }
 
 	    STAILQ_REMOVE_HEAD(&ctx->play, link);
-	    debug("Play: Popping buffer of %d samples", ctx->playcur->valid);
+	    //debug("Play: Popping buffer of %d samples", ctx->playcur->valid);
 	    
 	    ctx->playofs = 0;
 	}
 	
 	/* Find the amount of data we can copy */
 	avail = MIN(framesPerBuffer - ofs, ctx->playcur->valid - ctx->playofs);
-	debug("Copying %d samples to out", avail);
+	//debug("Copying %d samples to out", avail);
 	if (avail == 0)
 	    abort();
 	
@@ -162,7 +157,7 @@ patestCallback(const void *inputBuffer, void *outputBuffer,
 	ofs += avail;
 	
 	if (ctx->playofs == ctx->playcur->valid) {
-	    debug("Play: Pushing buffer to free list");
+	    //debug("Play: Pushing buffer to free list");
 	    ctx->playcur->valid = 0;
 	    STAILQ_INSERT_TAIL(&ctx->playfree, ctx->playcur, link);
 	    ctx->playcur = NULL;
@@ -174,11 +169,11 @@ patestCallback(const void *inputBuffer, void *outputBuffer,
     for (ofs = 0; ofs < framesPerBuffer; ) {
 	/* Need a new buffer? */
 	if (ctx->reccur == NULL) {
-	    debug("Rec: Grabbing free buffer");
+	    //debug("Rec: Grabbing free buffer");
 
 	    /* No free packets, bail out */
 	    if ((ctx->reccur = STAILQ_FIRST(&ctx->recfree)) == NULL) {
-		debug("Rec: overrun");
+		//debug("Rec: overrun");
 		ctx->overrun += framesPerBuffer - ofs;
 		break;
 	    }
@@ -192,20 +187,25 @@ patestCallback(const void *inputBuffer, void *outputBuffer,
 
 	assert(avail > 0);
 
-	debug("Copying %d samples from in", avail);
+	//debug("Copying %d samples from in", avail);
 	
 	bcopy(in, ctx->reccur->samples + ctx->reccur->valid, avail * sizeof(ctx->reccur->samples[0]));
 	ctx->reccur->valid += avail;
 	ofs += avail;
 	
 	if (ctx->reccur->valid == IN_FRAMES) {
-	    debug("Rec: Pushing buffer to rec list");
+	    //debug("Rec: Pushing buffer to rec list");
 	    STAILQ_INSERT_TAIL(&ctx->rec, ctx->reccur, link);
 	    ctx->reccur = NULL;
 	}
     }
-    debug("PA callback done for %lu frames", framesPerBuffer);
+    //debug("PA callback done for %lu frames", framesPerBuffer);
     
+#if 0
+    /* Run the echo canceller */
+    for (ofs = 0; ofs < framesPerBuffer; ofs++)
+	out[ofs] = echo_can_update(ctx->echocan, in[ofs], out[ofs]);
+#endif
     pthread_mutex_unlock(&ctx->mtx);
 
     return paContinue;
@@ -263,6 +263,18 @@ main(int argc, char **argv) {
 	exit(1);
     }
     
+    if (fcntl(netfd, F_GETFL, &i) == -1) {
+	fprintf(stderr, "Unable to get flags on socket: %s\n", strerror(errno));
+	exit(1);
+    }
+
+    i |= O_NONBLOCK;
+
+    if (fcntl(netfd, F_SETFL, &i) == -1) {
+	fprintf(stderr, "Unable to set flags on socket: %s\n", strerror(errno));
+	exit(1);
+    }
+
     bzero(&my_addr, sizeof(my_addr));
     my_addr.sin_family = AF_INET;
     my_addr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -284,13 +296,17 @@ main(int argc, char **argv) {
     STAILQ_INIT(&ctx.playfree);
     STAILQ_INIT(&ctx.rec);
     STAILQ_INIT(&ctx.recfree);
-
-    /* Init mutex */
-    pthread_mutex_init(&ctx.mtx, NULL);
     
     /* Init counters, etc */
     ctx.playofs = ctx.underrun = ctx.overrun = ctx.done = 0;
     ctx.playcur = ctx.reccur = NULL;
+
+    /* Init mutex */
+    if (pthread_mutex_init(&ctx.mtx, NULL) != 0){
+	fprintf(stderr, "Unable to init mutex: %s\n", strerror(errno));
+	err2 = 1;
+	goto error;
+    }
 
     /* Allocate buffers */
     for (i = 0; i < NUM_BUFS * 2; i++) {
@@ -427,7 +443,7 @@ runstream(PaCtx *ctx, int netfd, struct sockaddr *send_addr, socklen_t addrlen) 
 
 	/* Need a buffer? */
 	if (tmpbuf == NULL) {
-	    debug("Grabbing free play buffer");
+	    //debug("Grabbing free play buffer");
 	    
 	    while (1) {
 		pthread_mutex_lock(&ctx->mtx);
@@ -452,9 +468,10 @@ runstream(PaCtx *ctx, int netfd, struct sockaddr *send_addr, socklen_t addrlen) 
 	 * Ask for enough to fill what's left of our current buffer at most */
 	if (IN_FRAMES - residue > 0) {
 	    amt = sf_readf_short(ctx->sndfile, sndinbuf, IN_FRAMES - residue);
+#if 0
 	    debug("Read %d frames, asked for %d (%d)", amt, IN_FRAMES - residue,
-		   residue);
-	
+		  residue);
+#endif	
 	    /* Convert int16_t buffer to floats, pluck out the first channel */
 	    tmp = sndinbuf;
 	    for (i = 0; i < amt; i++) {
@@ -483,10 +500,11 @@ runstream(PaCtx *ctx, int netfd, struct sockaddr *send_addr, socklen_t addrlen) 
 	    goto out;
 	}
 
+#if 0
 	debug("Conversion consumed %lu/%lu frames and generated %lu/%lu frames, EOI %d",
 	      srcdata.input_frames_used, srcdata.input_frames,
 	      srcdata.output_frames_gen, srcdata.output_frames, srcdata.end_of_input);
-	
+#endif	
 	assert(tmpbuf->valid + srcdata.output_frames <= out_frames);
 	
 	/* Convert floats back to int16_t */
@@ -501,7 +519,7 @@ runstream(PaCtx *ctx, int netfd, struct sockaddr *send_addr, socklen_t addrlen) 
 	assert(tmpbuf->valid <= IN_FRAMES);
 	
 	if (tmpbuf->valid == IN_FRAMES) {
-	    debug("Pushing buffer for playback");
+	    //debug("Pushing buffer for playback");
 
 	    pthread_mutex_lock(&ctx->mtx);
 	    STAILQ_INSERT_TAIL(&ctx->play, tmpbuf, link);	
