@@ -11,20 +11,14 @@ LDFLAGS=	@LDFLAGS@ $(EFENCE)
 DEFS=		@DEFS@
 LIBS=		@LIBS@
 
-PORTAUDIO_CFLAGS= `pkg-config --cflags portaudio-2.0`
-PORTAUDIO_LIBS=	`pkg-config --libs portaudio-2.0`
-#PORTAUDIO_CFLAGS= @PORTAUDIO_CFLAGS@ 
-#PORTAUDIO_LIBS=	@PORTAUDIO_LIBS@
+PORTAUDIO_CFLAGS= @PORTAUDIO_CFLAGS@ 
+PORTAUDIO_LIBS=	@PORTAUDIO_LIBS@
 
-SNDFILE_CFLAGS=	`pkg-config --cflags sndfile`
-SNDFILE_LIBS=	`pkg-config --libs sndfile`
-#SNDFILE_CFLAGS=	@SNDFILE_CFLAGS@
-#SNDFILE_LIBS=	@SNDFILE_LIBS@
+SNDFILE_CFLAGS=	@SNDFILE_CFLAGS@
+SNDFILE_LIBS=	@SNDFILE_LIBS@
 
-SRC_CFLAGS=	`pkg-config --cflags samplerate`
-SRC_LIBS= 	`pkg-config --libs samplerate`
-#SRC_CFLAGS=	@SRC_CFLAGS@
-#SRC_LIBS= 	@SRC_LIBS@
+SRC_CFLAGS=	@SRC_CFLAGS@
+SRC_LIBS= 	@SRC_LIBS@
 
 CODEC2_CFLAGS= -I/usr/local/include
 CODEC2_LIBS= -L/usr/local/lib -lcodec2

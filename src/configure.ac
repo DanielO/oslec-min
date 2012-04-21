@@ -1,4 +1,10 @@
+# Generate configure by running
+# /opt/local/bin/aclocal --force
+# /opt/local/bin/autoconf --force
+#
 AC_INIT(echotest, 0.1)
+
+PKG_PROG_PKG_CONFIG()
 
 AC_PROG_CC
 
@@ -24,8 +30,8 @@ AC_SEARCH_LIBS([expf], [m], AC_DEFINE([HAVE_EXPF], [1], [Define to 1 if you have
 AC_SEARCH_LIBS([logf], [m], AC_DEFINE([HAVE_LOGF], [1], [Define to 1 if you have the logf() function.]))
 AC_SEARCH_LIBS([log10f], [m], AC_DEFINE([HAVE_LOG10F], [1], [Define to 1 if you have the log10f() function.]))
 
-#PKG_CHECK_MODULES([PORTAUDIO], [portaudio-2.0])
-#PKG_CHECK_MODULES([SNDFILE], [sndfile])
-#PKG_CHECK_MODULES([SRC], [samplerate])
+PKG_CHECK_MODULES([PORTAUDIO], [portaudio-2.0])
+PKG_CHECK_MODULES([SNDFILE], [sndfile])
+PKG_CHECK_MODULES([SRC], [samplerate])
 
 AC_OUTPUT(Makefile)
