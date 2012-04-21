@@ -267,9 +267,11 @@ main(int argc, char **argv) {
     runstream(&ctx, netfd, (struct sockaddr *)&send_addr, addrlen);
  
     /* Close down stream, PA, etc */
+/* XXX: hangs in pthread_join on Ubuntu 10.04 */
+#ifndef linux
     if ((err = Pa_StopStream(stream)) != paNoError)
 	goto error;
-
+#endif
     if ((err = Pa_CloseStream(stream)) != paNoError)
 	goto error;
 
