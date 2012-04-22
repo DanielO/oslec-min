@@ -134,18 +134,29 @@ patestCallback(const void *inputBuffer, void *outputBuffer,
     return paContinue;
 }
 
-/* Set stop flag on completion */
-/*******************************************************************/
+void
+usage(char *argv0) {
+    fprintf(stderr,
+	    "%s [-b ip] [-h] [-p port] destip destport\n"
+	    "\tip\tIP to bind to (default INADDR_ANY)\n"
+	    "\tport\tPort to bind to (default 4000)\n"
+	    "\tdestip\tIP to send to\n"
+	    "\tdestport\tPort to send to\n", argv0);
+    exit(1);
+}
 
 int
 main(int argc, char **argv) {
     PaStream		*stream;
     PaError		err, err2;
     PaCtx		ctx;
-    int			srcerr, i, netfd;
+    int			srcerr, i, netfd, bindport, destport, ch;
     struct sockaddr_in	my_addr, send_addr;
     socklen_t		addrlen;
+    char		*bindaddr, *argv0;
     
+    bindport = 4000;
+    bindaddr = NULL;
     ctx.src = NULL;
     ctx.echocan = NULL;
     ctx.codec2 = NULL;
@@ -153,9 +164,40 @@ main(int argc, char **argv) {
     ctx.incoverflow = ctx.underrun = ctx.overrun = 0;
     
     err = err2 = 0;
+    argv0 = argv[0];
     
-    if (argc != 1) {
-	fprintf(stderr, "Bad usage\n");
+    while ((ch = getopt(argc, argv, "b:hp:")) != -1) {
+	switch (ch) {
+	    case 'b':
+		bindaddr = optarg;
+		break;
+
+	    case 'p':
+		bindport = atoi(optarg);
+		if (bindport <= 0 || bindport > 65535) {
+		    fprintf(stderr, "bindport out of range, must be 1-65535\n");
+		    exit(1);
+		}
+		break;
+		
+
+	    case'h':
+	    case'?':
+	    default:
+		usage(argv0);
+		break;
+	}
+    }
+
+    argc -= optind;
+    argv += optind;
+	
+    if (argc != 2)
+	usage(argv0);
+
+    destport = atoi(argv[1]);
+    if (destport <= 0 || destport > 65535) {
+	fprintf(stderr, "destport out of range, must be 1-65535\n");
 	exit(1);
     }
     
@@ -163,8 +205,8 @@ main(int argc, char **argv) {
     bzero(&send_addr, sizeof(send_addr));
     send_addr.sin_family = AF_INET;
     send_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    send_addr.sin_port = htons(4001);
-    i = inet_pton(AF_INET, "127.0.0.1", &send_addr.sin_addr);
+    send_addr.sin_port = htons(destport);
+    i = inet_pton(AF_INET, argv[0], &send_addr.sin_addr);
     if (i == 0) {
 	fprintf(stderr, "Unable to parse destination address\n");
 	exit(1);
@@ -188,8 +230,19 @@ main(int argc, char **argv) {
     /* Bind local address/port */
     bzero(&my_addr, sizeof(my_addr));
     my_addr.sin_family = AF_INET;
-    my_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    my_addr.sin_port = htons(4000);
+    if (bindaddr == NULL)
+	my_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    else {
+	i = inet_pton(AF_INET, bindaddr, &my_addr.sin_addr);
+	if (i == 0) {
+	    fprintf(stderr, "Unable to parse bind address\n");
+	    exit(1);
+	} else if (i == -1) {
+	    fprintf(stderr, "Unable to parse bind address: %s\n", strerror(errno));
+	    exit(1);
+	}
+    }
+    my_addr.sin_port = htons(bindport);
 
     if (bind(netfd, (struct sockaddr *)&my_addr, sizeof(my_addr)) < 0) {
 	fprintf(stderr, "Unable to bind socket: %s\n", strerror(errno));
